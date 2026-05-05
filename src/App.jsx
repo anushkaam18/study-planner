@@ -28,16 +28,19 @@ function App() {
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState("");
 
-  const [darkMode, setDarkMode] = useState(false);
-
   const subjectsCollection = collection(db, "subjects");
 
-  // 🔐 AUTH LISTENER (FIX)
+  // 🔥 FIXED AUTH LISTENER (with fallback)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
+
+    // 🚨 fallback: never stay stuck
+    setTimeout(() => {
+      setLoading(false);
+    }, 2000);
 
     return () => unsubscribe();
   }, []);
@@ -61,12 +64,20 @@ function App() {
 
   // 🔐 LOGIN
   const login = async () => {
-    await signInWithEmailAndPassword(auth, email, password);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   // 🔐 SIGNUP
   const signup = async () => {
-    await createUserWithEmailAndPassword(auth, email, password);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   // ➕ ADD
@@ -101,60 +112,64 @@ function App() {
     loadSubjects();
   };
 
-  if (loading) return <p>Loading...</p>;
+  // 🚨 LOADING SCREEN (FIXED)
+  if (loading) return <h2>Loading...</h2>;
 
-  // 🔐 LOGIN PAGE
+  // 🔐 LOGIN UI
   if (!user) {
     return (
-      <div style={styles.container(false)}>
-        <h1>Login / Signup</h1>
+      <div style={styles.container}>
+        <h1>Study Planner</h1>
 
         <input
           placeholder="Email"
           onChange={(e) => setEmail(e.target.value)}
-          style={styles.input(false)}
+          style={styles.input}
         />
+
         <input
           type="password"
           placeholder="Password"
           onChange={(e) => setPassword(e.target.value)}
-          style={styles.input(false)}
+          style={styles.input}
         />
 
-        <button onClick={login} style={styles.btn}>Login</button>
-        <button onClick={signup} style={styles.btn}>Signup</button>
+        <button onClick={login} style={styles.btn}>
+          Login
+        </button>
+
+        <button onClick={signup} style={styles.btn}>
+          Signup
+        </button>
       </div>
     );
   }
 
   // 📚 MAIN APP
   return (
-    <div style={styles.container(darkMode)}>
+    <div style={styles.container}>
       <h1>📚 Study Planner</h1>
       <p>{user.email}</p>
-
-      <button onClick={() => setDarkMode(!darkMode)} style={styles.btn}>
-        Toggle Mode
-      </button>
 
       <input
         value={subject}
         onChange={(e) => setSubject(e.target.value)}
         placeholder="Enter subject"
-        style={styles.input(darkMode)}
+        style={styles.input}
       />
+
       <button onClick={addSubject} style={styles.btn}>
         Add
       </button>
 
       {subjects.map((sub) => (
-        <div key={sub.id} style={styles.card(darkMode)}>
+        <div key={sub.id} style={styles.card}>
           {editId === sub.id ? (
             <>
               <input
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                style={styles.input(darkMode)}
+                style={styles.input}
               />
               <button onClick={() => updateSubject(sub.id)} style={styles.btn}>
                 Save
@@ -190,48 +205,45 @@ function App() {
 
 export default App;
 
-// 🎨 STYLES
+// 🎨 styles
 const styles = {
-  container: (dark) => ({
+  container: {
     textAlign: "center",
     padding: "20px",
-    minHeight: "100vh",
-    background: dark ? "#121212" : "#f5f5f5",
-    color: dark ? "#fff" : "#000",
-  }),
-  input: () => ({
+  },
+  input: {
     padding: "10px",
     margin: "10px",
-    borderRadius: "10px",
-  }),
+    borderRadius: "8px",
+  },
   btn: {
     padding: "10px",
     margin: "5px",
-    borderRadius: "10px",
+    borderRadius: "8px",
     background: "#6c63ff",
-    color: "#fff",
+    color: "white",
     border: "none",
   },
   delete: {
     padding: "10px",
     margin: "5px",
-    borderRadius: "10px",
+    borderRadius: "8px",
     background: "red",
-    color: "#fff",
+    color: "white",
     border: "none",
   },
   logout: {
     marginTop: "20px",
     padding: "10px",
-    borderRadius: "10px",
+    borderRadius: "8px",
     background: "black",
-    color: "#fff",
+    color: "white",
     border: "none",
   },
-  card: (dark) => ({
+  card: {
     margin: "10px",
     padding: "10px",
     borderRadius: "10px",
-    background: dark ? "#1e1e1e" : "#fff",
-  }),
+    background: "#eee",
+  },
 };
