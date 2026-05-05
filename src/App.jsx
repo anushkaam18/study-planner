@@ -84,7 +84,10 @@ function App() {
 
   // ➕ ADD
   const addSubject = async () => {
-    if (!subject.trim()) return;
+    if (!subject.trim() || !category) {
+      alert('PLEASE SELECT CATEGORY AND ENTER SUBJECT")
+        return;
+    }
 
     await addDoc(subjectsCollection, {
       name: subject,
@@ -160,12 +163,6 @@ function App() {
         Toggle {darkMode ? "Light" : "Dark"} Mode
       </button>
 
-      <input
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-        placeholder="Enter subject"
-        style={styles.input}
-      />
       <select
   value={category}
   onChange={(e) => setCategory(e.target.value)}
@@ -181,6 +178,13 @@ function App() {
   <option>Entrance Exams</option>
 </select>
 
+      <input
+        value={subject}
+        onChange={(e) => setSubject(e.target.value)}
+        placeholder="Enter subject"
+        style={styles.input}
+      />
+      
       <button onClick={addSubject} style={styles.btn}>
         Add
       </button>
