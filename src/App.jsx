@@ -1,304 +1,204 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
-
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut
-} from "firebase/auth";
-
 import {
   collection,
   addDoc,
   getDocs,
   deleteDoc,
-  doc
+  doc,
+  updateDoc,
 } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
+function App({ user }) {
   const [subject, setSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
 
-  const [darkMode, setDarkMode] = useState(true);
+  const [editId, setEditId] = useState(null);
+  const [editText, setEditText] = useState("");
 
-  // 🔐 Auth listener
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+  const [darkMode, setDarkMode] = useState(false);
 
-      if (currentUser) {
-        loadSubjects(currentUser.email);
-      } else {
-        setSubjects([]);
-      }
-    });
+  const subjectsCollection = collection(db, "subjects");
 
-    return () => unsub();
-  }, []);
-
-  // 📥 Load subjects
-  const loadSubjects = async (email) => {
-    const data = await getDocs(collection(db, "subjects"));
-
+  // LOAD SUBJECTS
+  const loadSubjects = async () => {
+    const data = await getDocs(subjectsCollection);
     const filtered = data.docs
-      .filter((d) => d.data().user === email)
-      .map((d) => ({
-        id: d.id,
-        name: d.data().name
-      }));
+      .map((doc) => ({ ...doc.data(), id: doc.id }))
+      .filter((item) => item.user === user.email);
 
     setSubjects(filtered);
   };
 
-  // ➕ Add subject
+  useEffect(() => {
+    loadSubjects();
+  }, []);
+
+  // ADD SUBJECT
   const addSubject = async () => {
     if (!subject.trim()) return;
 
-    await addDoc(collection(db, "subjects"), {
+    await addDoc(subjectsCollection, {
       name: subject,
-      user: user.email
+      user: user.email,
     });
 
     setSubject("");
-    loadSubjects(user.email);
+    loadSubjects();
   };
 
-  // 🗑️ Delete subject
+  // DELETE SUBJECT
   const deleteSubject = async (id) => {
     await deleteDoc(doc(db, "subjects", id));
-    loadSubjects(user.email);
+    loadSubjects();
   };
 
-  // 🔐 Login
-  const login = async () => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      console.log(e.message);
-    }
-  };
+  // UPDATE SUBJECT
+  const updateSubject = async (id) => {
+    if (!editText.trim()) return;
 
-  // 🆕 Signup
-  const signup = async () => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      console.log(e.message);
-    }
-  };
+    await updateDoc(doc(db, "subjects", id), {
+      name: editText,
+    });
 
-  // 🚪 Logout
-  const logout = async () => {
-    await signOut(auth);
+    setEditId(null);
+    setEditText("");
+    loadSubjects();
   };
 
   return (
     <div style={styles.container(darkMode)}>
+      <h1>📚 Study Planner</h1>
 
-      {/* 🌙 Toggle */}
-      <button style={styles.toggle} onClick={() => setDarkMode(!darkMode)}>
-        {darkMode ? "☀️ Light" : "🌙 Dark"}
+      <p>Welcome, {user.email}</p>
+
+      {/* DARK MODE TOGGLE */}
+      <button onClick={() => setDarkMode(!darkMode)} style={styles.btn}>
+        Toggle {darkMode ? "Light" : "Dark"} Mode
       </button>
 
-      <h1 style={{ marginBottom: "20px" }}>Study Planner</h1>
+      {/* ADD SUBJECT */}
+      <div style={{ marginTop: "20px" }}>
+        <input
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          placeholder="Enter subject"
+          style={styles.input(darkMode)}
+        />
+        <button onClick={addSubject} style={styles.btn}>
+          Add Subject
+        </button>
+      </div>
 
-      {!user ? (
-        // 🔐 LOGIN UI
-        <div style={styles.card(darkMode)}>
+      {/* SUBJECT LIST */}
+      <div style={{ marginTop: "30px" }}>
+        {subjects.map((sub) => (
+          <div key={sub.id} style={styles.card(darkMode)}>
+            {editId === sub.id ? (
+              <>
+                <input
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  style={styles.input(darkMode)}
+                />
+                <button
+                  onClick={() => updateSubject(sub.id)}
+                  style={styles.btn}
+                >
+                  Save
+                </button>
+              </>
+            ) : (
+              <>
+                <h3>{sub.name}</h3>
+                <button
+                  onClick={() => {
+                    setEditId(sub.id);
+                    setEditText(sub.name);
+                  }}
+                  style={styles.btn}
+                >
+                  ✏️ Edit
+                </button>
+              </>
+            )}
 
-          <h2>Welcome Back 👋</h2>
-
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={styles.input(darkMode)}
-          />
-
-          <input
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={styles.input(darkMode)}
-          />
-
-          <button style={styles.btn} onClick={login}>
-            Login
-          </button>
-
-          <button style={styles.btnGreen} onClick={signup}>
-            Sign Up
-          </button>
-
-        </div>
-      ) : (
-        // 📊 DASHBOARD
-        <div style={styles.card(darkMode)}>
-
-          <h2>Hello 👋</h2>
-          <p>{user.email}</p>
-
-          <div style={{ marginTop: "15px" }}>
-            <input
-              placeholder="Add subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              style={styles.input(darkMode)}
-            />
-
-            <button style={styles.btn} onClick={addSubject}>
-              ➕ Add Subject
+            <button
+              onClick={() => deleteSubject(sub.id)}
+              style={styles.delete}
+            >
+              Delete
             </button>
           </div>
+        ))}
+      </div>
 
-          {/* 🧾 CARDS */}
-          <div style={styles.grid}>
-            {subjects.map((sub) => (
-              <div
-                key={sub.id}
-                style={styles.cardItem}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
-              >
-                <h3 style={{ margin: 0 }}>{sub.name}</h3>
-
-                <button
-                  style={styles.delete}
-                  onClick={() => deleteSubject(sub.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <button style={styles.logout} onClick={logout}>
-            Logout
-          </button>
-
-        </div>
-      )}
+      {/* LOGOUT */}
+      <button onClick={() => signOut(auth)} style={styles.logout}>
+        Logout
+      </button>
     </div>
   );
 }
 
 export default App;
 
-// 🎨 PRO STYLES
 const styles = {
   container: (dark) => ({
-    minHeight: "100vh",
-    padding: "40px 20px",
     textAlign: "center",
-    fontFamily: "Inter, sans-serif",
-    background: dark
-      ? "linear-gradient(135deg,#0f172a,#111827)"
-      : "linear-gradient(135deg,#eef2ff,#f5f3ff)",
-    color: dark ? "#fff" : "#111"
-  }),
-
-  card: (dark) => ({
-    width: "380px",
-    margin: "auto",
-    padding: "25px",
-    borderRadius: "24px",
-    background: dark
-      ? "rgba(255,255,255,0.05)"
-      : "rgba(255,255,255,0.75)",
-    backdropFilter: "blur(18px)",
-    border: "1px solid rgba(255,255,255,0.2)",
-    boxShadow: "0 20px 40px rgba(0,0,0,0.15)"
+    minHeight: "100vh",
+    padding: "20px",
+    background: dark ? "#121212" : "#f5f5f5",
+    color: dark ? "#fff" : "#000",
   }),
 
   input: (dark) => ({
-    width: "92%",
-    padding: "12px",
-    margin: "10px 0",
-    borderRadius: "14px",
+    padding: "10px",
+    margin: "10px",
+    borderRadius: "10px",
     border: "none",
     outline: "none",
-    background: dark ? "#1f2937" : "#fff",
-    color: dark ? "#fff" : "#111"
+    background: dark ? "#333" : "#fff",
+    color: dark ? "#fff" : "#000",
   }),
 
   btn: {
-    width: "95%",
-    padding: "12px",
-    borderRadius: "14px",
+    padding: "10px 15px",
+    margin: "5px",
+    borderRadius: "10px",
     border: "none",
-    background: "linear-gradient(135deg,#6366f1,#3b82f6)",
-    color: "#fff",
-    fontWeight: "600",
     cursor: "pointer",
-    marginTop: "8px"
-  },
-
-  btnGreen: {
-    width: "95%",
-    padding: "12px",
-    borderRadius: "14px",
-    border: "none",
-    background: "linear-gradient(135deg,#22c55e,#16a34a)",
+    background: "#6c63ff",
     color: "#fff",
-    fontWeight: "600",
-    cursor: "pointer",
-    marginTop: "8px"
-  },
-
-  logout: {
-    marginTop: "15px",
-    width: "95%",
-    padding: "12px",
-    borderRadius: "14px",
-    border: "none",
-    background: "#ef4444",
-    color: "#fff",
-    fontWeight: "600"
-  },
-
-  toggle: {
-    marginBottom: "15px",
-    padding: "8px 14px",
-    borderRadius: "20px",
-    border: "none",
-    cursor: "pointer"
-  },
-
-  grid: {
-    marginTop: "20px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))",
-    gap: "12px"
-  },
-
-  cardItem: {
-    padding: "12px",
-    borderRadius: "16px",
-    background: "rgba(255,255,255,0.2)",
-    backdropFilter: "blur(10px)",
-    boxShadow: "0 10px 20px rgba(0,0,0,0.1)",
-    transition: "0.3s",
-    cursor: "pointer"
   },
 
   delete: {
-    marginTop: "8px",
-    padding: "5px 10px",
-    borderRadius: "8px",
+    padding: "10px",
+    margin: "5px",
+    borderRadius: "10px",
     border: "none",
-    background: "#ff4d4d",
-    color: "#fff",
     cursor: "pointer",
-    fontSize: "12px"
-  }
+    background: "red",
+    color: "#fff",
+  },
+
+  logout: {
+    marginTop: "30px",
+    padding: "10px 20px",
+    borderRadius: "10px",
+    border: "none",
+    cursor: "pointer",
+    background: "black",
+    color: "#fff",
+  },
+
+  card: (dark) => ({
+    padding: "15px",
+    margin: "10px auto",
+    borderRadius: "15px",
+    width: "250px",
+    background: dark ? "#1e1e1e" : "#fff",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+  }),
 };
