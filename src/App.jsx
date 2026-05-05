@@ -25,6 +25,8 @@ function App() {
   const [subject, setSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
 
+  const[category, setCategory] = useState("");
+
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState("");
 
@@ -86,10 +88,12 @@ function App() {
 
     await addDoc(subjectsCollection, {
       name: subject,
+      category: category,
       user: user.email,
     });
 
     setSubject("");
+    setCategory("");
     loadSubjects();
   };
 
@@ -162,6 +166,20 @@ function App() {
         placeholder="Enter subject"
         style={styles.input}
       />
+      <select
+  value={category}
+  onChange={(e) => setCategory(e.target.value)}
+  style={styles.input}
+>
+  <option value="">Select Category</option>
+  <option>Class 4-8</option>
+  <option>Class 9-10</option>
+  <option>Class 11-12</option>
+  <option>College</option>
+  <option>Placement</option>
+  <option>Government Exams</option>
+  <option>Entrance Exams</option>
+</select>
 
       <button onClick={addSubject} style={styles.btn}>
         Add
@@ -184,6 +202,7 @@ function App() {
             ) : (
               <>
                 <h3>{sub.name}</h3>
+                <p>{sub.category}</p>
                 <button
                   onClick={() => {
                     setEditId(sub.id);
