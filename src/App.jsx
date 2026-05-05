@@ -1,4 +1,3 @@
-import bg from "./assets/bg.png";
 import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import {
