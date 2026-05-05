@@ -85,7 +85,7 @@ function App() {
   // ➕ ADD
   const addSubject = async () => {
     if (!subject.trim() || !category) {
-      alert('PLEASE SELECT CATEGORY AND ENTER SUBJECT")
+      alert("PLEASE SELECT CATEGORY AND ENTER SUBJECT")
         return;
     }
 
