@@ -259,7 +259,7 @@ const styles = {
   padding: "20px",
   minHeight: "100vh",
 
-  backgroundImage: `url(${bg})`,
+  backgroundImage: "url('/bg.png')",
   backgroundSize: "cover",
   backgroundPosition: "center",
 
