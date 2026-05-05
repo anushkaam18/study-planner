@@ -21,9 +21,12 @@ function App({ user }) {
 
   const subjectsCollection = collection(db, "subjects");
 
-  // LOAD SUBJECTS
+  // 🔥 LOAD SUBJECTS (FIXED)
   const loadSubjects = async () => {
+    if (!user) return;
+
     const data = await getDocs(subjectsCollection);
+
     const filtered = data.docs
       .map((doc) => ({ ...doc.data(), id: doc.id }))
       .filter((item) => item.user === user.email);
@@ -31,13 +34,16 @@ function App({ user }) {
     setSubjects(filtered);
   };
 
+  // 🔥 WAIT FOR USER (IMPORTANT FIX)
   useEffect(() => {
-    loadSubjects();
-  }, []);
+    if (user) {
+      loadSubjects();
+    }
+  }, [user]);
 
-  // ADD SUBJECT
+  // ➕ ADD SUBJECT
   const addSubject = async () => {
-    if (!subject.trim()) return;
+    if (!subject.trim() || !user) return;
 
     await addDoc(subjectsCollection, {
       name: subject,
@@ -48,13 +54,13 @@ function App({ user }) {
     loadSubjects();
   };
 
-  // DELETE SUBJECT
+  // 🗑 DELETE
   const deleteSubject = async (id) => {
     await deleteDoc(doc(db, "subjects", id));
     loadSubjects();
   };
 
-  // UPDATE SUBJECT
+  // ✏️ UPDATE
   const updateSubject = async (id) => {
     if (!editText.trim()) return;
 
@@ -71,79 +77,91 @@ function App({ user }) {
     <div style={styles.container(darkMode)}>
       <h1>📚 Study Planner</h1>
 
-      <p>Welcome, {user.email}</p>
+      {/* 🔐 USER CHECK */}
+      {!user ? (
+        <p>Loading user...</p>
+      ) : (
+        <>
+          <p>Welcome, {user.email}</p>
 
-      {/* DARK MODE TOGGLE */}
-      <button onClick={() => setDarkMode(!darkMode)} style={styles.btn}>
-        Toggle {darkMode ? "Light" : "Dark"} Mode
-      </button>
+          {/* 🌙 DARK MODE */}
+          <button onClick={() => setDarkMode(!darkMode)} style={styles.btn}>
+            Toggle {darkMode ? "Light" : "Dark"} Mode
+          </button>
 
-      {/* ADD SUBJECT */}
-      <div style={{ marginTop: "20px" }}>
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="Enter subject"
-          style={styles.input(darkMode)}
-        />
-        <button onClick={addSubject} style={styles.btn}>
-          Add Subject
-        </button>
-      </div>
-
-      {/* SUBJECT LIST */}
-      <div style={{ marginTop: "30px" }}>
-        {subjects.map((sub) => (
-          <div key={sub.id} style={styles.card(darkMode)}>
-            {editId === sub.id ? (
-              <>
-                <input
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  style={styles.input(darkMode)}
-                />
-                <button
-                  onClick={() => updateSubject(sub.id)}
-                  style={styles.btn}
-                >
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                <h3>{sub.name}</h3>
-                <button
-                  onClick={() => {
-                    setEditId(sub.id);
-                    setEditText(sub.name);
-                  }}
-                  style={styles.btn}
-                >
-                  ✏️ Edit
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={() => deleteSubject(sub.id)}
-              style={styles.delete}
-            >
-              Delete
+          {/* ➕ ADD */}
+          <div style={{ marginTop: "20px" }}>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Enter subject"
+              style={styles.input(darkMode)}
+            />
+            <button onClick={addSubject} style={styles.btn}>
+              Add Subject
             </button>
           </div>
-        ))}
-      </div>
 
-      {/* LOGOUT */}
-      <button onClick={() => signOut(auth)} style={styles.logout}>
-        Logout
-      </button>
+          {/* 📚 LIST */}
+          <div style={{ marginTop: "30px" }}>
+            {subjects.length === 0 ? (
+              <p>No subjects yet</p>
+            ) : (
+              subjects.map((sub) => (
+                <div key={sub.id} style={styles.card(darkMode)}>
+                  {editId === sub.id ? (
+                    <>
+                      <input
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        style={styles.input(darkMode)}
+                      />
+                      <button
+                        onClick={() => updateSubject(sub.id)}
+                        style={styles.btn}
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <h3>{sub.name}</h3>
+                      <button
+                        onClick={() => {
+                          setEditId(sub.id);
+                          setEditText(sub.name);
+                        }}
+                        style={styles.btn}
+                      >
+                        ✏️ Edit
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    onClick={() => deleteSubject(sub.id)}
+                    style={styles.delete}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 🚪 LOGOUT */}
+          <button onClick={() => signOut(auth)} style={styles.logout}>
+            Logout
+          </button>
+        </>
+      )}
     </div>
   );
 }
 
 export default App;
 
+// 🎨 STYLES
 const styles = {
   container: (dark) => ({
     textAlign: "center",
