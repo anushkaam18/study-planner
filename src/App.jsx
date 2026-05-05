@@ -1,3 +1,4 @@
+import bg from "./assets/bg.png";
 import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import {
@@ -254,12 +255,22 @@ const styles = {
     flexDirection: "column",
   },
   container: (dark) => ({
-    textAlign: "center",
-    padding: "20px",
-    minHeight: "100vh",
-    background: dark ? "#121212" : "#f5f5f5",
-    color: dark ? "#fff" : "#000",
-  }),
+  textAlign: "center",
+  padding: "20px",
+  minHeight: "100vh",
+
+  backgroundImage: `url(${bg})`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+
+  backgroundColor: dark
+    ? "rgba(0,0,0,0.6)"
+    : "rgba(255,255,255,0.6)",
+
+  backgroundBlendMode: "overlay",
+
+  color: dark ? "#fff" : "#000",
+}),
   input: {
     padding: "10px",
     margin: "10px",
