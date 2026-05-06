@@ -32,18 +32,24 @@ function App() {
 
   const subjectsCollection = collection(db, "subjects");
 
-  // AUTH LISTENER
+  // 🔐 AUTH
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+
+      if (currentUser) {
+        setStep("category");
+      } else {
+        setStep("login");
+      }
+
       setLoading(false);
-      if (currentUser) setStep("category");
     });
 
     return () => unsub();
   }, []);
 
-  // LOAD SUBJECTS
+  // 📥 LOAD SUBJECTS
   const loadSubjects = async () => {
     if (!user) return;
 
@@ -60,7 +66,7 @@ function App() {
     if (step === "subjects") loadSubjects();
   }, [step]);
 
-  // LOGIN
+  // 🔐 LOGIN
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -77,7 +83,7 @@ function App() {
     }
   };
 
-  // ADD SUBJECT
+  // ➕ ADD SUBJECT
   const addSubject = async () => {
     if (!subject.trim()) return;
 
@@ -91,24 +97,33 @@ function App() {
     loadSubjects();
   };
 
-  // DELETE
+  // ❌ DELETE SUBJECT
   const deleteSubject = async (id) => {
     await deleteDoc(doc(db, "subjects", id));
     loadSubjects();
+  };
+
+  // 🚪 LOGOUT FIXED
+  const handleLogout = async () => {
+    await signOut(auth);
+    setUser(null);
+    setStep("login");
+    setCategory("");
+    setSubjects([]);
   };
 
   if (loading)
     return <h2 style={{ textAlign: "center" }}>⏳ Loading...</h2>;
 
   return (
-    <div style={styles.wrapper}>
-      
+    <div style={styles.wrapper(darkMode)}>
+
       {/* 🎥 VIDEO BACKGROUND */}
       <video autoPlay loop muted playsInline style={styles.video}>
         <source src="/bgvid.mp4" type="video/mp4" />
       </video>
 
-      {/* DARK OVERLAY */}
+      {/* OVERLAY */}
       <div style={styles.overlay(darkMode)}></div>
 
       {/* CONTENT */}
@@ -124,7 +139,7 @@ function App() {
           </button>
         )}
 
-        {/* LOGIN SCREEN */}
+        {/* LOGIN PAGE */}
         {step === "login" && (
           <div style={styles.card}>
             <h1>📚 Study Planner</h1>
@@ -152,7 +167,7 @@ function App() {
           </div>
         )}
 
-        {/* CATEGORY SCREEN */}
+        {/* CATEGORY PAGE */}
         {step === "category" && (
           <div style={styles.card}>
             <h2>📂 Select Category</h2>
@@ -162,7 +177,7 @@ function App() {
               onChange={(e) => setCategory(e.target.value)}
               style={styles.input}
             >
-              <option value="">Choose</option>
+              <option value="">Choose Category</option>
               <option>School 📘</option>
               <option>College 🎓</option>
               <option>Exams 📝</option>
@@ -170,19 +185,25 @@ function App() {
             </select>
 
             <button
-              onClick={() => setStep("subjects")}
+              onClick={() => {
+                if (!category) {
+                  alert("⚠️ Please select a category");
+                  return;
+                }
+                setStep("subjects");
+              }}
               style={styles.btn}
             >
               ➡ Continue
             </button>
 
-            <button onClick={() => signOut(auth)} style={styles.logout}>
+            <button onClick={handleLogout} style={styles.logout}>
               🚪 Logout
             </button>
           </div>
         )}
 
-        {/* SUBJECT SCREEN */}
+        {/* SUBJECT PAGE */}
         {step === "subjects" && (
           <div style={styles.card}>
             <h2>📚 Subjects</h2>
@@ -225,11 +246,11 @@ function App() {
 
 export default App;
 const styles = {
-  wrapper: {
+  wrapper: () => ({
     height: "100vh",
-    fontFamily: "Algerian, sans-serif",
+    fontFamily: "Poppins, Segoe UI, sans-serif",
     overflow: "hidden",
-  },
+  }),
 
   video: {
     position: "fixed",
@@ -245,7 +266,7 @@ const styles = {
     height: "100%",
     background: dark
       ? "rgba(0,0,0,0.6)"
-      : "rgba(255,255,255,0.3)",
+      : "rgba(255,255,255,0.25)",
     zIndex: -1,
   }),
 
@@ -257,11 +278,11 @@ const styles = {
   },
 
   card: {
-    width: "350px",
-    padding: "20px",
-    borderRadius: "20px",
-    backdropFilter: "blur(10px)",
-    background: "rgba(255,255,255,0.2)",
+    width: "360px",
+    padding: "25px",
+    borderRadius: "18px",
+    backdropFilter: "blur(12px)",
+    background: "rgba(255,255,255,0.15)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
     textAlign: "center",
   },
@@ -272,11 +293,12 @@ const styles = {
     margin: "10px",
     borderRadius: "10px",
     border: "none",
+    outline: "none",
   },
 
   btn: {
     padding: "10px",
-    margin: "5px",
+    margin: "6px",
     borderRadius: "10px",
     background: "#6c63ff",
     color: "white",
@@ -286,7 +308,7 @@ const styles = {
 
   btnOutline: {
     padding: "10px",
-    margin: "5px",
+    margin: "6px",
     borderRadius: "10px",
     background: "transparent",
     border: "2px solid white",
@@ -315,7 +337,7 @@ const styles = {
     marginTop: "10px",
     padding: "10px",
     borderRadius: "10px",
-    background: "rgba(255,255,255,0.4)",
+    background: "rgba(255,255,255,0.3)",
     display: "flex",
     justifyContent: "space-between",
   },
