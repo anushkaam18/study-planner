@@ -3,8 +3,8 @@ import { auth, db } from "./firebase";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut,
   onAuthStateChanged,
+  signOut,
 } from "firebase/auth";
 import {
   collection,
@@ -12,7 +12,6 @@ import {
   getDocs,
   deleteDoc,
   doc,
-  updateDoc,
 } from "firebase/firestore";
 
 function App() {
@@ -22,311 +21,309 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [step, setStep] = useState("login"); 
+  // login → category → subjects
+
+  const [category, setCategory] = useState("");
   const [subject, setSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
-
-  const[category, setCategory] = useState("");
-
-  const [editId, setEditId] = useState(null);
-  const [editText, setEditText] = useState("");
 
   const [darkMode, setDarkMode] = useState(false);
 
   const subjectsCollection = collection(db, "subjects");
 
-  // 🔐 AUTH LISTENER
+  // AUTH LISTENER
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
+      if (currentUser) setStep("category");
     });
 
-    // fallback
-    setTimeout(() => setLoading(false), 2000);
-
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  // 📥 LOAD SUBJECTS
+  // LOAD SUBJECTS
   const loadSubjects = async () => {
     if (!user) return;
 
     const data = await getDocs(subjectsCollection);
 
     const filtered = data.docs
-      .map((doc) => ({ ...doc.data(), id: doc.id }))
-      .filter((item) => item.user === user.email);
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .filter((s) => s.user === user.email);
 
     setSubjects(filtered);
   };
 
   useEffect(() => {
-    if (user) loadSubjects();
-  }, [user]);
+    if (step === "subjects") loadSubjects();
+  }, [step]);
 
-  // 🔐 LOGIN
+  // LOGIN
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      alert(err.message);
+    } catch (e) {
+      alert(e.message);
     }
   };
 
-  // 🔐 SIGNUP
   const signup = async () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      alert(err.message);
+    } catch (e) {
+      alert(e.message);
     }
   };
 
-  // ➕ ADD
+  // ADD SUBJECT
   const addSubject = async () => {
-    if (!subject.trim() || !category) {
-      alert("PLEASE SELECT CATEGORY AND ENTER SUBJECT")
-        return;
-    }
+    if (!subject.trim()) return;
 
     await addDoc(subjectsCollection, {
       name: subject,
-      category: category,
+      category,
       user: user.email,
     });
 
     setSubject("");
-    setCategory("");
     loadSubjects();
   };
 
-  // 🗑 DELETE
+  // DELETE
   const deleteSubject = async (id) => {
     await deleteDoc(doc(db, "subjects", id));
     loadSubjects();
   };
 
-  // ✏️ EDIT
-  const updateSubject = async (id) => {
-    if (!editText.trim()) return;
+  if (loading)
+    return <h2 style={{ textAlign: "center" }}>⏳ Loading...</h2>;
 
-    await updateDoc(doc(db, "subjects", id), {
-      name: editText,
-    });
-
-    setEditId(null);
-    setEditText("");
-    loadSubjects();
-  };
-
-  if (loading) return <h2 style={{ textAlign: "center" }}>Loading...</h2>;
-
-  // 🔐 LOGIN UI
-  if (!user) {
-    return (
-      <div style={styles.loginContainer}>
-        <div style={styles.loginCard}>
-          <h1>📚 Study Planner</h1>
-
-          <input
-            placeholder="Email"
-            onChange={(e) => setEmail(e.target.value)}
-            style={styles.input}
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            onChange={(e) => setPassword(e.target.value)}
-            style={styles.input}
-          />
-
-          <button onClick={login} style={styles.btnFull}>
-            Login
-          </button>
-
-          <button onClick={signup} style={styles.btnOutline}>
-            Signup
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 📚 MAIN APP
   return (
-    <div style={styles.container(darkMode)}>
-      <h1>📚 Study Planner</h1>
-      <p>{user.email}</p>
-
-      <button onClick={() => setDarkMode(!darkMode)} style={styles.btn}>
-        Toggle {darkMode ? "Light" : "Dark"} Mode
-      </button>
-
-      <select
-  value={category}
-  onChange={(e) => setCategory(e.target.value)}
-  style={styles.input}
->
-  <option value="">Select Category</option>
-  <option>Class 4-8</option>
-  <option>Class 9-10</option>
-  <option>Class 11-12</option>
-  <option>College</option>
-  <option>Placement</option>
-  <option>Government Exams</option>
-  <option>Entrance Exams</option>
-</select>
-
-      <input
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-        placeholder="Enter subject"
-        style={styles.input}
-      />
+    <div style={styles.wrapper}>
       
-      <button onClick={addSubject} style={styles.btn}>
-        Add
-      </button>
+      {/* 🎥 VIDEO BACKGROUND */}
+      <video autoPlay loop muted playsInline style={styles.video}>
+        <source src="/bgvid.mp4" type="video/mp4" />
+      </video>
 
-      <div style={styles.grid}>
-        {subjects.map((sub) => (
-          <div key={sub.id} style={styles.card(darkMode)}>
-            {editId === sub.id ? (
-              <>
-                <input
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  style={styles.input}
-                />
-                <button onClick={() => updateSubject(sub.id)} style={styles.btn}>
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                <h3>{sub.name}</h3>
-                <p>{sub.category}</p>
-                <button
-                  onClick={() => {
-                    setEditId(sub.id);
-                    setEditText(sub.name);
-                  }}
-                  style={styles.btn}
-                >
-                  ✏️ Edit
-                </button>
-              </>
-            )}
+      {/* DARK OVERLAY */}
+      <div style={styles.overlay(darkMode)}></div>
 
-            <button onClick={() => deleteSubject(sub.id)} style={styles.delete}>
-              Delete
+      {/* CONTENT */}
+      <div style={styles.container}>
+
+        {/* 🌙 TOGGLE */}
+        {user && (
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            style={styles.toggle}
+          >
+            {darkMode ? "🌞 Light" : "🌙 Dark"}
+          </button>
+        )}
+
+        {/* LOGIN SCREEN */}
+        {step === "login" && (
+          <div style={styles.card}>
+            <h1>📚 Study Planner</h1>
+
+            <input
+              placeholder="Email"
+              onChange={(e) => setEmail(e.target.value)}
+              style={styles.input}
+            />
+
+            <input
+              type="password"
+              placeholder="Password"
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.input}
+            />
+
+            <button onClick={login} style={styles.btn}>
+              🔐 Login
+            </button>
+
+            <button onClick={signup} style={styles.btnOutline}>
+              ✨ Signup
             </button>
           </div>
-        ))}
-      </div>
+        )}
 
-      <button onClick={() => signOut(auth)} style={styles.logout}>
-        Logout
-      </button>
+        {/* CATEGORY SCREEN */}
+        {step === "category" && (
+          <div style={styles.card}>
+            <h2>📂 Select Category</h2>
+
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              style={styles.input}
+            >
+              <option value="">Choose</option>
+              <option>School 📘</option>
+              <option>College 🎓</option>
+              <option>Exams 📝</option>
+              <option>Placement 💼</option>
+            </select>
+
+            <button
+              onClick={() => setStep("subjects")}
+              style={styles.btn}
+            >
+              ➡ Continue
+            </button>
+
+            <button onClick={() => signOut(auth)} style={styles.logout}>
+              🚪 Logout
+            </button>
+          </div>
+        )}
+
+        {/* SUBJECT SCREEN */}
+        {step === "subjects" && (
+          <div style={styles.card}>
+            <h2>📚 Subjects</h2>
+
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Enter subject"
+              style={styles.input}
+            />
+
+            <button onClick={addSubject} style={styles.btn}>
+              ➕ Add
+            </button>
+
+            <div>
+              {subjects.map((s) => (
+                <div key={s.id} style={styles.subjectCard}>
+                  📘 {s.name}
+                  <button
+                    onClick={() => deleteSubject(s.id)}
+                    style={styles.delete}
+                  >
+                    ❌
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setStep("category")} style={styles.btnOutline}>
+              🔙 Back
+            </button>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
 
 export default App;
-
-// 🎨 STYLES
 const styles = {
-  loginContainer: {
+  wrapper: {
+    height: "100vh",
+    fontFamily: "Algerian, sans-serif",
+    overflow: "hidden",
+  },
+
+  video: {
+    position: "fixed",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    zIndex: -2,
+  },
+
+  overlay: (dark) => ({
+    position: "fixed",
+    width: "100%",
+    height: "100%",
+    background: dark
+      ? "rgba(0,0,0,0.6)"
+      : "rgba(255,255,255,0.3)",
+    zIndex: -1,
+  }),
+
+  container: {
+    height: "100%",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    height: "100vh",
-    background: "#f5f5f5",
   },
-  loginCard: {
-    background: "white",
-    padding: "30px",
-    borderRadius: "15px",
-    width: "300px",
-    boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
-    display: "flex",
-    flexDirection: "column",
+
+  card: {
+    width: "350px",
+    padding: "20px",
+    borderRadius: "20px",
+    backdropFilter: "blur(10px)",
+    background: "rgba(255,255,255,0.2)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+    textAlign: "center",
   },
-  container: (dark) => ({
-  textAlign: "center",
-  padding: "20px",
-  minHeight: "100vh",
 
-  backgroundImage: "url('/bg.png')",
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-
-  backgroundColor: dark
-    ? "rgba(0,0,0,0.6)"
-    : "rgba(255,255,255,0.6)",
-
-  backgroundBlendMode: "overlay",
-
-  color: dark ? "#fff" : "#000",
-}),
   input: {
+    width: "90%",
     padding: "10px",
     margin: "10px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
+    borderRadius: "10px",
+    border: "none",
   },
+
   btn: {
     padding: "10px",
     margin: "5px",
-    borderRadius: "8px",
+    borderRadius: "10px",
     background: "#6c63ff",
     color: "white",
     border: "none",
     cursor: "pointer",
   },
-  btnFull: {
-    padding: "10px",
-    marginTop: "10px",
-    borderRadius: "8px",
-    background: "#6c63ff",
-    color: "white",
-    border: "none",
-  },
+
   btnOutline: {
     padding: "10px",
-    marginTop: "10px",
-    borderRadius: "8px",
-    background: "transparent",
-    color: "#6c63ff",
-    border: "2px solid #6c63ff",
-  },
-  delete: {
-    padding: "10px",
     margin: "5px",
-    borderRadius: "8px",
+    borderRadius: "10px",
+    background: "transparent",
+    border: "2px solid white",
+    color: "white",
+  },
+
+  toggle: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    padding: "8px",
+    borderRadius: "10px",
+    border: "none",
+  },
+
+  logout: {
+    marginTop: "10px",
+    background: "black",
+    color: "white",
+    padding: "8px",
+    borderRadius: "10px",
+    border: "none",
+  },
+
+  subjectCard: {
+    marginTop: "10px",
+    padding: "10px",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.4)",
+    display: "flex",
+    justifyContent: "space-between",
+  },
+
+  delete: {
     background: "red",
     color: "white",
     border: "none",
+    borderRadius: "5px",
   },
-  logout: {
-    marginTop: "20px",
-    padding: "10px",
-    borderRadius: "8px",
-    background: "black",
-    color: "white",
-    border: "none",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: "15px",
-    marginTop: "20px",
-  },
-  card: (dark) => ({
-    padding: "15px",
-    borderRadius: "12px",
-    background: dark ? "#1e1e1e" : "#fff",
-    boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
-  }),
 };
