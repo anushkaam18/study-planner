@@ -1,351 +1,221 @@
 import { useState, useEffect } from "react";
-import { auth, db } from "./firebase";
+import { auth } from "./firebase";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
 } from "firebase/auth";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
+import { subscribeToSubjects, addSubject, deleteSubject } from "./services/subjectsService";
+import LoginView from "./views/LoginView";
+import CategoryView from "./views/CategoryView";
+import DashboardView from "./views/DashboardView";
+import Toast from "./components/ui/Toast";
+import { AnimatePresence, motion } from "framer-motion";
 
+/**
+ * Main Application Orchestrator.
+ * Binds clean business logic, Firebase authentication events,
+ * and optimized real-time database queries to state-driven view routers.
+ * Encapsulated inside a high-end CSS radial-gradient mesh wrapper.
+ */
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const [step, setStep] = useState("login"); 
-  // login → category → subjects
-
+  // App routing steps: "login" | "category" | "subjects"
+  const [step, setStep] = useState("login");
   const [category, setCategory] = useState("");
-  const [subject, setSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
 
-  const [darkMode, setDarkMode] = useState(false);
+  // Toast message management
+  const [toast, setToast] = useState({ visible: false, message: "", type: "error" });
 
-  const subjectsCollection = collection(db, "subjects");
+  const showToast = (message, type = "error") => {
+    setToast({ visible: true, message, type });
+  };
 
-  // 🔐 AUTH
+  const hideToast = () => {
+    setToast({ ...toast, visible: false });
+  };
+
+  // 🔐 1. AUTH STATE OBSERVER
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-
       if (currentUser) {
-        setStep("category");
+        // Safe check: Keep active category if already set, else guide to selection
+        setStep((prev) => (prev === "subjects" && category ? "subjects" : "category"));
       } else {
         setStep("login");
+        setCategory("");
+        setSubjects([]);
       }
-
       setLoading(false);
     });
 
-    return () => unsub();
-  }, []);
+    return () => unsubscribe();
+  }, [category]);
 
-  // 📥 LOAD SUBJECTS
-  const loadSubjects = async () => {
-    if (!user) return;
-
-    const data = await getDocs(subjectsCollection);
-
-    const filtered = data.docs
-      .map((d) => ({ ...d.data(), id: d.id }))
-      .filter((s) => s.user === user.email);
-
-    setSubjects(filtered);
-  };
-
+  // 📥 2. SECURE REAL-TIME DATA SYNCING
   useEffect(() => {
-    if (step === "subjects") loadSubjects();
-  }, [step]);
+    // Only subscribe when authenticated, inside subjects step, and category is active
+    if (!user || step !== "subjects" || !category) return;
 
-  // 🔐 LOGIN
-  const login = async () => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      alert(e.message);
-    }
-  };
-
-  const signup = async () => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      alert(e.message);
-    }
-  };
-
-  // ➕ ADD SUBJECT
-  const addSubject = async () => {
-    if (!subject.trim()) return;
-
-    await addDoc(subjectsCollection, {
-      name: subject,
-      category,
-      user: user.email,
+    // Sets up a real-time reactive sync to database-level query constraints
+    const unsubscribe = subscribeToSubjects(user.email, (data) => {
+      // Sort subjects by newest creation first, keeping list visually organized
+      const sorted = [...data].sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0;
+        return b.createdAt.seconds - a.createdAt.seconds;
+      });
+      setSubjects(sorted);
     });
 
-    setSubject("");
-    loadSubjects();
+    // Cleanup: Avoid memory leaks when component unmounts or steps change!
+    return () => unsubscribe();
+  }, [user, step, category]);
+
+  // 🔐 3. FIREBASE AUTH ACTIONS
+  const handleLogin = async (email, password) => {
+    setIsAuthenticating(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      showToast("Welcome back! Loading focus dashboard...", "success");
+    } catch (e) {
+      showToast(e.message.replace("Firebase: ", ""), "error");
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
-  // ❌ DELETE SUBJECT
-  const deleteSubject = async (id) => {
-    await deleteDoc(doc(db, "subjects", id));
-    loadSubjects();
+  const handleSignup = async (email, password) => {
+    setIsAuthenticating(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      showToast("Account established successfully!", "success");
+    } catch (e) {
+      showToast(e.message.replace("Firebase: ", ""), "error");
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
-  // 🚪 LOGOUT FIXED
   const handleLogout = async () => {
-    await signOut(auth);
-    setUser(null);
-    setStep("login");
-    setCategory("");
-    setSubjects([]);
+    try {
+      await signOut(auth);
+      showToast("Signed out securely.", "success");
+    } catch (e) {
+      showToast("Failed to sign out.", "error");
+    }
   };
 
-  if (loading)
-    return <h2 style={{ textAlign: "center" }}>⏳ Loading...</h2>;
+  // ➕ 4. SECURE SUBJECT ACTIONS
+  const handleAddSubject = async (subjectName) => {
+    if (!user) return;
+    try {
+      await addSubject(subjectName, category, user.email);
+    } catch (e) {
+      showToast("Failed to write to database. Check connection.", "error");
+      throw e;
+    }
+  };
+
+  const handleDeleteSubject = async (id) => {
+    try {
+      await deleteSubject(id);
+    } catch (e) {
+      showToast("Failed to remove course.", "error");
+    }
+  };
+
+  // ─── LOADING SCREEN OVERLAY ───
+  if (loading) {
+    return (
+      <div className="min-h-screen mesh-bg flex flex-col items-center justify-center gap-4 text-zinc-400">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+          className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary"
+        />
+        <span className="text-sm font-medium tracking-wide">Syncing Session...</span>
+      </div>
+    );
+  }
 
   return (
-    <div style={styles.wrapper(darkMode)}>
-
-      {/* 🎥 VIDEO BACKGROUND */}
-      <video autoPlay loop muted playsInline style={styles.video}>
-        <source src="/bgvid.mp4" type="video/mp4" />
-      </video>
-
-      {/* OVERLAY */}
-      <div style={styles.overlay(darkMode)}></div>
-
-      {/* CONTENT */}
-      <div style={styles.container}>
-
-        {/* 🌙 TOGGLE */}
-        {user && (
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            style={styles.toggle}
-          >
-            {darkMode ? "🌞 Light" : "🌙 Dark"}
-          </button>
+    <div className="min-h-screen mesh-bg relative overflow-hidden font-sans antialiased text-zinc-100 selection:bg-primary/30 selection:text-white">
+      
+      {/* ─── TOAST BANNER NOTIFICATION ─── */}
+      <AnimatePresence>
+        {toast.visible && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={hideToast}
+          />
         )}
+      </AnimatePresence>
 
-        {/* LOGIN PAGE */}
+      {/* ─── VIEW ANIMATED TRANSITIONS ─── */}
+      <AnimatePresence mode="wait">
         {step === "login" && (
-          <div style={styles.card}>
-            <h1>📚 Study Planner</h1>
-
-            <input
-              placeholder="Email"
-              onChange={(e) => setEmail(e.target.value)}
-              style={styles.input}
+          <motion.div
+            key="login-screen"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.3 }}
+          >
+            <LoginView
+              onLogin={handleLogin}
+              onSignup={handleSignup}
+              isAuthenticating={isAuthenticating}
             />
-
-            <input
-              type="password"
-              placeholder="Password"
-              onChange={(e) => setPassword(e.target.value)}
-              style={styles.input}
-            />
-
-            <button onClick={login} style={styles.btn}>
-              🔐 Login
-            </button>
-
-            <button onClick={signup} style={styles.btnOutline}>
-              ✨ Signup
-            </button>
-          </div>
+          </motion.div>
         )}
 
-        {/* CATEGORY PAGE */}
         {step === "category" && (
-          <div style={styles.card}>
-            <h2>📂 Select Category</h2>
-
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              style={styles.input}
-            >
-              <option value="">Choose Category</option>
-              <option>School 📘</option>
-              <option>College 🎓</option>
-              <option>Exams 📝</option>
-              <option>Placement 💼</option>
-            </select>
-
-            <button
-              onClick={() => {
-                if (!category) {
-                  alert("⚠️ Please select a category");
-                  return;
-                }
-                setStep("subjects");
-              }}
-              style={styles.btn}
-            >
-              ➡ Continue
-            </button>
-
-            <button onClick={handleLogout} style={styles.logout}>
-              🚪 Logout
-            </button>
-          </div>
-        )}
-
-        {/* SUBJECT PAGE */}
-        {step === "subjects" && (
-          <div style={styles.card}>
-            <h2>📚 Subjects</h2>
-
-            <input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Enter subject"
-              style={styles.input}
+          <motion.div
+            key="category-screen"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.3 }}
+          >
+            <CategoryView
+              selectedCategory={category}
+              onSelectCategory={setCategory}
+              onContinue={() => setStep("subjects")}
+              onLogout={handleLogout}
             />
-
-            <button onClick={addSubject} style={styles.btn}>
-              ➕ Add
-            </button>
-
-            <div>
-              {subjects.map((s) => (
-                <div key={s.id} style={styles.subjectCard}>
-                  📘 {s.name}
-                  <button
-                    onClick={() => deleteSubject(s.id)}
-                    style={styles.delete}
-                  >
-                    ❌
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <button onClick={() => setStep("category")} style={styles.btnOutline}>
-              🔙 Back
-            </button>
-          </div>
+          </motion.div>
         )}
 
-      </div>
+        {step === "subjects" && (
+          <motion.div
+            key="subjects-screen"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.3 }}
+          >
+            <DashboardView
+              userEmail={user?.email}
+              category={category}
+              subjects={subjects}
+              onAddSubject={handleAddSubject}
+              onDeleteSubject={handleDeleteSubject}
+              onBack={() => setStep("category")}
+              onLogout={handleLogout}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
 
 export default App;
-const styles = {
-  wrapper: () => ({
-    height: "100vh",
-    fontFamily: "Poppins, Segoe UI, sans-serif",
-    overflow: "hidden",
-  }),
-
-  video: {
-    position: "fixed",
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    zIndex: -2,
-  },
-
-  overlay: (dark) => ({
-    position: "fixed",
-    width: "100%",
-    height: "100%",
-    background: dark
-      ? "rgba(0,0,0,0.6)"
-      : "rgba(255,255,255,0.25)",
-    zIndex: -1,
-  }),
-
-  container: {
-    height: "100%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  card: {
-    width: "360px",
-    padding: "25px",
-    borderRadius: "18px",
-    backdropFilter: "blur(12px)",
-    background: "rgba(255,255,255,0.15)",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-    textAlign: "center",
-  },
-
-  input: {
-    width: "90%",
-    padding: "10px",
-    margin: "10px",
-    borderRadius: "10px",
-    border: "none",
-    outline: "none",
-  },
-
-  btn: {
-    padding: "10px",
-    margin: "6px",
-    borderRadius: "10px",
-    background: "#6c63ff",
-    color: "white",
-    border: "none",
-    cursor: "pointer",
-  },
-
-  btnOutline: {
-    padding: "10px",
-    margin: "6px",
-    borderRadius: "10px",
-    background: "transparent",
-    border: "2px solid white",
-    color: "white",
-  },
-
-  toggle: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    padding: "8px",
-    borderRadius: "10px",
-    border: "none",
-  },
-
-  logout: {
-    marginTop: "10px",
-    background: "black",
-    color: "white",
-    padding: "8px",
-    borderRadius: "10px",
-    border: "none",
-  },
-
-  subjectCard: {
-    marginTop: "10px",
-    padding: "10px",
-    borderRadius: "10px",
-    background: "rgba(255,255,255,0.3)",
-    display: "flex",
-    justifyContent: "space-between",
-  },
-
-  delete: {
-    background: "red",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-  },
-};
